@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
@@ -12,6 +11,7 @@ type Room = {
   code: string;
   is_private: boolean;
   created_at: string;
+  member_count?: number;
 };
 
 type RoomMember = {
@@ -153,6 +153,76 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       }
     })
     .subscribe();
+
+  // Subscribe to room member changes
+  const membersChannel = supabase
+    .channel('room-members-changes')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'room_members',
+      filter: currentRoom ? `room_id=eq.${currentRoom.id}` : undefined,
+    }, async (payload) => {
+      if (currentRoom) {
+        const { data: updatedMembers, error } = await supabase
+          .from('room_members')
+          .select(`
+            id,
+            user_id,
+            joined_at,
+            profiles (
+              id,
+              username,
+              avatar_url
+            )
+          `)
+          .eq('room_id', currentRoom.id);
+
+        if (!error && updatedMembers) {
+          setRoomMembers(updatedMembers);
+          setCurrentRoom(prev => prev ? { ...prev, member_count: updatedMembers.length } : null);
+        }
+      }
+    })
+    .subscribe();
+
+  // Cleanup subscriptions
+  useEffect(() => {
+    return () => {
+      supabase.removeChannel(roomsChannel);
+      supabase.removeChannel(membersChannel);
+    };
+  }, []);
+
+  // Update room members when current room changes
+  useEffect(() => {
+    if (currentRoom) {
+      const fetchRoomMembers = async () => {
+        const { data: members, error } = await supabase
+          .from('room_members')
+          .select(`
+            id,
+            user_id,
+            joined_at,
+            profiles (
+              id,
+              username,
+              avatar_url
+            )
+          `)
+          .eq('room_id', currentRoom.id);
+
+        if (!error && members) {
+          setRoomMembers(members);
+          setCurrentRoom(prev => prev ? { ...prev, member_count: members.length } : null);
+        }
+      };
+
+      fetchRoomMembers();
+    } else {
+      setRoomMembers([]);
+    }
+  }, [currentRoom]);
 
   const fetchRoom = async (roomId: string) => {
     const { data, error } = await supabase
@@ -344,25 +414,51 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const { data: roomData, error: roomError } = await supabase
+      console.log('Attempting to join room with code:', code);
+      
+      const { data: rooms, error: roomError } = await supabase
         .from('chat_rooms')
-        .select('*')
-        .eq('code', code)
-        .single();
+        .select('id, name, code, created_by, is_private')
+        .eq('code', code);
 
       if (roomError) {
+        console.error('Error fetching room:', roomError);
+        toast.error('Error finding room');
+        return false;
+      }
+
+      console.log('Found rooms:', rooms);
+
+      if (!rooms || rooms.length === 0) {
+        console.log('No room found with code:', code);
+        toast.error('Room not found. Please check the code and try again.');
+        return false;
+      }
+
+      if (rooms.length > 1) {
+        console.error('Multiple rooms found with the same code:', rooms);
         toast.error('Invalid room code');
         return false;
       }
 
+      const roomData = rooms[0];
+      console.log('Found room:', roomData);
+
       const { data: memberData, error: memberError } = await supabase
         .from('room_members')
-        .select('*')
+        .select('id')
         .eq('room_id', roomData.id)
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id);
 
-      if (memberData) {
+      if (memberError) {
+        console.error('Error checking membership:', memberError);
+        toast.error('Error checking room membership');
+        return false;
+      }
+
+      console.log('Current membership status:', memberData);
+
+      if (memberData && memberData.length > 0) {
         toast.info('You are already a member of this room');
         setCurrentRoom(roomData);
         return true;
@@ -373,18 +469,24 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         .insert([
           {
             room_id: roomData.id,
-            user_id: user.id
+            user_id: user.id,
+            joined_at: new Date().toISOString()
           }
         ]);
 
-      if (joinError) throw joinError;
+      if (joinError) {
+        console.error('Error joining room:', joinError);
+        toast.error('Failed to join room. Please try again.');
+        return false;
+      }
 
-      toast.success(`You've joined "${roomData.name}"`);
+      // Set the current room to trigger the members fetch
       setCurrentRoom(roomData);
+      toast.success(`You've joined "${roomData.name}"`);
       return true;
     } catch (error: any) {
       console.error('Error joining room:', error.message);
-      toast.error('Failed to join room');
+      toast.error('Failed to join room. Please try again.');
       return false;
     }
   };
