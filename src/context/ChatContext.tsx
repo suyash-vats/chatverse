@@ -222,7 +222,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           receiverId: "currentUser",
           text: replies[Math.floor(Math.random() * replies.length)],
           timestamp: new Date().toISOString(),
-          status: "delivered",
+          status: "delivered", // Ensure this is a valid status
         };
 
         setMessages(prev => {
