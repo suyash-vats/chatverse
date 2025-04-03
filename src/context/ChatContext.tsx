@@ -1,275 +1,209 @@
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { toast } from "sonner";
+import { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { nanoid } from "nanoid";
+import { toast } from "sonner";
 
-// Types
-export type User = {
-  id: string;
-  name: string;
-  avatar: string;
-  status: string;
-  isOnline: boolean;
-  lastSeen?: string;
-};
+// Define the allowed message status types
+type MessageStatus = "sent" | "delivered" | "read";
 
-export type Message = {
+// Message type definition
+type Message = {
   id: string;
   senderId: string;
   receiverId: string;
   text: string;
   timestamp: string;
-  status: "sent" | "delivered" | "read";
+  status: MessageStatus;
 };
 
-export type Contact = User;
+// User type definition
+type User = {
+  id: string;
+  username: string;
+  avatar: string;
+  status: string;
+  lastSeen: string;
+  isOnline: boolean;
+};
 
+// Chat context type definition
 type ChatContextType = {
-  currentUser: User | null;
-  contacts: Contact[];
+  user: User | null;
+  contacts: User[];
   messages: Record<string, Message[]>;
-  selectedContact: Contact | null;
+  activeContact: User | null;
   login: (username: string) => void;
-  logout: () => void;
-  selectContact: (contact: Contact) => void;
   sendMessage: (text: string) => void;
-  markMessageAsRead: (messageId: string) => void;
+  setActiveContact: (contact: User | null) => void;
+  loading: boolean;
 };
 
-// Create initial mock data
-const mockUsers: User[] = [
+// Create the context
+const ChatContext = createContext<ChatContextType | undefined>(undefined);
+
+// Sample contacts data
+const sampleContacts: User[] = [
   {
-    id: "user1",
-    name: "John Doe",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
-    status: "Available",
+    id: "1",
+    username: "Alice Smith",
+    avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=Alice",
+    status: "Just landed in Paris! ✈️",
+    lastSeen: new Date().toISOString(),
     isOnline: true,
   },
   {
-    id: "user2",
-    name: "Jane Smith",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane",
-    status: "At work",
-    isOnline: true,
-  },
-  {
-    id: "user3",
-    name: "Mike Johnson",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
-    status: "Busy",
+    id: "2",
+    username: "Bob Johnson",
+    avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=Bob",
+    status: "At the gym 💪",
+    lastSeen: new Date(Date.now() - 15 * 60000).toISOString(),
     isOnline: false,
-    lastSeen: "Today at 14:30",
   },
   {
-    id: "user4",
-    name: "Sarah Williams",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    status: "Hey there! I'm using ChatterVerse",
+    id: "3",
+    username: "Charlie Brown",
+    avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=Charlie",
+    status: "Working from home today",
+    lastSeen: new Date(Date.now() - 2 * 3600000).toISOString(),
     isOnline: true,
   },
   {
-    id: "user5",
-    name: "David Brown",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=David",
-    status: "In a meeting",
-    isOnline: false,
-    lastSeen: "Yesterday",
+    id: "4",
+    username: "Diana Prince",
+    avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=Diana",
+    status: "Do not disturb",
+    lastSeen: new Date(Date.now() - 30 * 60000).toISOString(),
+    isOnline: true,
   },
 ];
 
-// Initial messages
-const initialMessages: Record<string, Message[]> = {
-  user1: [
-    {
-      id: "msg1",
-      senderId: "user1",
-      receiverId: "currentUser",
-      text: "Hey there! How are you?",
-      timestamp: "2023-04-03T10:30:00",
-      status: "read",
-    },
-    {
-      id: "msg2",
-      senderId: "currentUser",
-      receiverId: "user1",
-      text: "I'm good! How about you?",
-      timestamp: "2023-04-03T10:32:00",
-      status: "read",
-    },
-    {
-      id: "msg3",
-      senderId: "user1",
-      receiverId: "currentUser",
-      text: "Doing great! Just wanted to check in.",
-      timestamp: "2023-04-03T10:33:00",
-      status: "read",
-    },
-  ],
-  user2: [
-    {
-      id: "msg4",
-      senderId: "user2",
-      receiverId: "currentUser",
-      text: "Hello! Did you get the documents I sent?",
-      timestamp: "2023-04-02T15:20:00",
-      status: "read",
-    },
-    {
-      id: "msg5",
-      senderId: "currentUser",
-      receiverId: "user2",
-      text: "Yes, I got them. Thanks!",
-      timestamp: "2023-04-02T15:22:00",
-      status: "delivered",
-    },
-  ],
+// Sample messages data
+const generateSampleMessages = (userId: string): Record<string, Message[]> => {
+  const result: Record<string, Message[]> = {};
+  
+  sampleContacts.forEach((contact) => {
+    const messages: Message[] = [];
+    // Generate 1-5 messages for each contact
+    const count = Math.floor(Math.random() * 5) + 1;
+    
+    for (let i = 0; i < count; i++) {
+      const isFromUser = Math.random() > 0.5;
+      messages.push({
+        id: nanoid(),
+        senderId: isFromUser ? userId : contact.id,
+        receiverId: isFromUser ? contact.id : userId,
+        text: `Sample message ${i + 1}`,
+        timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(),
+        status: "read" as MessageStatus,
+      });
+    }
+    
+    // Sort messages by timestamp
+    messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    result[contact.id] = messages;
+  });
+  
+  return result;
 };
 
-const ChatContext = createContext<ChatContextType | undefined>(undefined);
+// Provider component
+export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [contacts, setContacts] = useState<User[]>([]);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [activeContact, setActiveContact] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export function ChatProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>(mockUsers);
-  const [messages, setMessages] = useState<Record<string, Message[]>>(initialMessages);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  // Initialize user from local storage
+  useEffect(() => {
+    const storedUser = localStorage.getItem("chatUser");
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setContacts(sampleContacts);
+      setMessages(generateSampleMessages(parsedUser.id));
+    }
+    setLoading(false);
+  }, []);
 
   // Login function
   const login = (username: string) => {
-    const user: User = {
-      id: "currentUser",
-      name: username,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-      status: "Online",
+    const newUser: User = {
+      id: nanoid(),
+      username,
+      avatar: `https://api.dicebear.com/6.x/avataaars/svg?seed=${username}`,
+      status: "Hey there! I'm using ChatterVerse",
+      lastSeen: new Date().toISOString(),
       isOnline: true,
     };
-    setCurrentUser(user);
-    toast.success(`Welcome, ${username}!`);
-  };
-
-  // Logout function
-  const logout = () => {
-    setCurrentUser(null);
-    setSelectedContact(null);
-    toast.info("You've been logged out");
-  };
-
-  // Select contact
-  const selectContact = (contact: Contact) => {
-    setSelectedContact(contact);
     
-    // Mark messages from this contact as read
-    if (messages[contact.id]) {
-      const updatedMessages = { ...messages };
-      updatedMessages[contact.id] = updatedMessages[contact.id].map(msg => 
-        msg.senderId === contact.id && msg.status !== "read" 
-          ? { ...msg, status: "read" } 
-          : msg
-      );
-      setMessages(updatedMessages);
-    }
+    setUser(newUser);
+    localStorage.setItem("chatUser", JSON.stringify(newUser));
+    setContacts(sampleContacts);
+    setMessages(generateSampleMessages(newUser.id));
   };
 
-  // Send message
+  // Send message function
   const sendMessage = (text: string) => {
-    if (!currentUser || !selectedContact || !text.trim()) return;
-
+    if (!user || !activeContact) return;
+    
     const newMessage: Message = {
       id: nanoid(),
-      senderId: "currentUser",
-      receiverId: selectedContact.id,
+      senderId: user.id,
+      receiverId: activeContact.id,
       text,
       timestamp: new Date().toISOString(),
-      status: "sent",
+      status: "sent" as MessageStatus,
     };
-
-    setMessages(prev => {
-      const contactMessages = prev[selectedContact.id] || [];
+    
+    setMessages((prev) => {
+      const contactMessages = prev[activeContact.id] || [];
       return {
         ...prev,
-        [selectedContact.id]: [...contactMessages, newMessage],
+        [activeContact.id]: [...contactMessages, newMessage],
       };
     });
-
-    // Simulate message delivery after a short delay
+    
+    // Simulate reply after 1-3 seconds
     setTimeout(() => {
-      setMessages(prev => {
-        const updatedContactMessages = prev[selectedContact.id].map(msg =>
-          msg.id === newMessage.id ? { ...msg, status: "delivered" } : msg
-        );
+      const reply: Message = {
+        id: nanoid(),
+        senderId: activeContact.id,
+        receiverId: user.id,
+        text: `Reply to: ${text}`,
+        timestamp: new Date().toISOString(),
+        status: "sent" as MessageStatus,
+      };
+      
+      setMessages((prev) => {
+        const contactMessages = prev[activeContact.id] || [];
         return {
           ...prev,
-          [selectedContact.id]: updatedContactMessages,
+          [activeContact.id]: [...contactMessages, reply],
         };
       });
-    }, 1000);
-
-    // Simulate reply for demo purposes
-    if (Math.random() > 0.5) {
-      setTimeout(() => {
-        const replies = [
-          "Got it, thanks!",
-          "I'll check and get back to you",
-          "Sounds good!",
-          "Nice! 👍",
-          "Interesting...",
-          "Thank you for letting me know",
-          "I appreciate that",
-        ];
-        
-        const replyMessage: Message = {
-          id: nanoid(),
-          senderId: selectedContact.id,
-          receiverId: "currentUser",
-          text: replies[Math.floor(Math.random() * replies.length)],
-          timestamp: new Date().toISOString(),
-          status: "delivered", // Ensure this is a valid status
-        };
-
-        setMessages(prev => {
-          const contactMessages = prev[selectedContact.id] || [];
-          return {
-            ...prev,
-            [selectedContact.id]: [...contactMessages, replyMessage],
-          };
-        });
-      }, 2000 + Math.random() * 3000);
-    }
+      
+      toast.info(`New message from ${activeContact.username}`);
+    }, 1000 + Math.random() * 2000);
   };
 
-  // Mark message as read
-  const markMessageAsRead = (messageId: string) => {
-    if (!selectedContact) return;
-    
-    setMessages(prev => {
-      const updatedContactMessages = prev[selectedContact.id].map(msg =>
-        msg.id === messageId ? { ...msg, status: "read" } : msg
-      );
-      return {
-        ...prev,
-        [selectedContact.id]: updatedContactMessages,
-      };
-    });
+  // Context value
+  const value = {
+    user,
+    contacts,
+    messages,
+    activeContact,
+    login,
+    sendMessage,
+    setActiveContact,
+    loading,
   };
 
-  return (
-    <ChatContext.Provider
-      value={{
-        currentUser,
-        contacts,
-        messages,
-        selectedContact,
-        login,
-        logout,
-        selectContact,
-        sendMessage,
-        markMessageAsRead,
-      }}
-    >
-      {children}
-    </ChatContext.Provider>
-  );
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 
+// Custom hook to use the chat context
 export function useChat() {
   const context = useContext(ChatContext);
   if (context === undefined) {
