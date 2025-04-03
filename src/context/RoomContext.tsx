@@ -121,16 +121,20 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       schema: 'public',
       table: 'room_members',
     }, (payload) => {
-      if (user && payload.new && payload.new.user_id === user.id) {
+      if (user && payload.new && typeof payload.new === 'object' && 'user_id' in payload.new && payload.new.user_id === user.id) {
         if (payload.eventType === 'INSERT') {
-          fetchRoom(payload.new.room_id).then(room => {
-            if (room) {
-              setRooms(prev => [...prev, room]);
-            }
-          });
-        } else if (payload.eventType === 'DELETE') {
-          setRooms(prev => prev.filter(r => r.id !== payload.old.room_id));
-          if (currentRoom?.id === payload.old.room_id) {
+          const roomId = 'room_id' in payload.new ? payload.new.room_id : undefined;
+          if (roomId) {
+            fetchRoom(roomId).then(room => {
+              if (room) {
+                setRooms(prev => [...prev, room]);
+              }
+            });
+          }
+        } else if (payload.eventType === 'DELETE' && payload.old && typeof payload.old === 'object' && 'room_id' in payload.old) {
+          const oldRoomId = payload.old.room_id;
+          setRooms(prev => prev.filter(r => r.id !== oldRoomId));
+          if (currentRoom?.id === oldRoomId) {
             setCurrentRoom(null);
           }
         }
@@ -237,7 +241,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       table: 'messages',
       filter: currentRoom ? `room_id=eq.${currentRoom.id}` : undefined,
     }, async (payload) => {
-      if (!payload.new || !currentRoom || payload.new.room_id !== currentRoom.id) return;
+      if (!payload.new || !currentRoom || !('room_id' in payload.new) || payload.new.room_id !== currentRoom.id) return;
 
       // Fetch sender profile info
       const { data: profileData } = await supabase
