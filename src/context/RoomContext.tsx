@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
@@ -121,7 +120,12 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       schema: 'public',
       table: 'room_members',
     }, (payload) => {
-      if (user && payload.new && typeof payload.new === 'object' && 'user_id' in payload.new && payload.new.user_id === user.id) {
+      if (user && 
+          payload.new && 
+          typeof payload.new === 'object' && 
+          'user_id' in payload.new && 
+          payload.new.user_id === user.id) {
+        
         if (payload.eventType === 'INSERT') {
           const roomId = 'room_id' in payload.new ? payload.new.room_id : undefined;
           if (roomId) {
@@ -131,7 +135,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
               }
             });
           }
-        } else if (payload.eventType === 'DELETE' && payload.old && typeof payload.old === 'object' && 'room_id' in payload.old) {
+        } else if (payload.eventType === 'DELETE' && 
+                  payload.old && 
+                  typeof payload.old === 'object' && 
+                  'room_id' in payload.old) {
           const oldRoomId = payload.old.room_id;
           setRooms(prev => prev.filter(r => r.id !== oldRoomId));
           if (currentRoom?.id === oldRoomId) {
@@ -243,7 +250,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }, async (payload) => {
       if (!payload.new || !currentRoom || !('room_id' in payload.new) || payload.new.room_id !== currentRoom.id) return;
 
-      // Fetch sender profile info
       const { data: profileData } = await supabase
         .from('profiles')
         .select('username, avatar')
@@ -257,7 +263,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
       setMessages(prev => [...prev, newMessage]);
 
-      // Update message status to 'read' if it's from someone else
       if (user && payload.new.sender_id !== user.id) {
         await supabase
           .from('messages')
@@ -278,7 +283,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Generate a random 6-character code
       const code = nanoid(6);
 
       const { data, error } = await supabase
@@ -296,7 +300,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      // Add the creator as a member of the room
       await supabase
         .from('room_members')
         .insert([
@@ -323,7 +326,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Find the room with this code
       const { data: roomData, error: roomError } = await supabase
         .from('chat_rooms')
         .select('*')
@@ -335,7 +337,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      // Check if user is already a member
       const { data: memberData, error: memberError } = await supabase
         .from('room_members')
         .select('*')
@@ -349,7 +350,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      // Join the room
       const { error: joinError } = await supabase
         .from('room_members')
         .insert([
