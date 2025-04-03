@@ -9,8 +9,8 @@ type MessageBubbleProps = {
 };
 
 const MessageBubble = ({ message }: MessageBubbleProps) => {
-  const { currentUser } = useChat();
-  const isFromMe = message.senderId === "currentUser";
+  const { user } = useChat();
+  const isFromMe = message.senderId === user?.id;
 
   const renderMessageStatus = () => {
     if (!isFromMe) return null;

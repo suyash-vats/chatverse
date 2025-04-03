@@ -1,14 +1,13 @@
-
 import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 
 // Define the allowed message status types
-type MessageStatus = "sent" | "delivered" | "read";
+export type MessageStatus = "sent" | "delivered" | "read";
 
 // Message type definition
-type Message = {
+export type Message = {
   id: string;
   senderId: string;
   receiverId: string;
@@ -18,7 +17,7 @@ type Message = {
 };
 
 // User type definition
-type User = {
+export type User = {
   id: string;
   username: string;
   avatar: string;
@@ -33,9 +32,11 @@ type ChatContextType = {
   contacts: User[];
   messages: Record<string, Message[]>;
   activeContact: User | null;
+  selectedContact: User | null;
   login: (username: string) => void;
   sendMessage: (text: string) => void;
   setActiveContact: (contact: User | null) => void;
+  selectContact: (contact: User) => void;
   loading: boolean;
 };
 
@@ -84,7 +85,6 @@ const generateSampleMessages = (userId: string): Record<string, Message[]> => {
   
   sampleContacts.forEach((contact) => {
     const messages: Message[] = [];
-    // Generate 1-5 messages for each contact
     const count = Math.floor(Math.random() * 5) + 1;
     
     for (let i = 0; i < count; i++) {
@@ -99,7 +99,6 @@ const generateSampleMessages = (userId: string): Record<string, Message[]> => {
       });
     }
     
-    // Sort messages by timestamp
     messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     result[contact.id] = messages;
   });
@@ -113,9 +112,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [contacts, setContacts] = useState<User[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [activeContact, setActiveContact] = useState<User | null>(null);
+  const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize user from local storage
   useEffect(() => {
     const storedUser = localStorage.getItem("chatUser");
     if (storedUser) {
@@ -127,7 +126,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  // Login function
   const login = (username: string) => {
     const newUser: User = {
       id: nanoid(),
@@ -144,7 +142,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages(generateSampleMessages(newUser.id));
   };
 
-  // Send message function
   const sendMessage = (text: string) => {
     if (!user || !activeContact) return;
     
@@ -165,7 +162,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       };
     });
     
-    // Simulate reply after 1-3 seconds
     setTimeout(() => {
       const reply: Message = {
         id: nanoid(),
@@ -188,15 +184,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }, 1000 + Math.random() * 2000);
   };
 
-  // Context value
+  const selectContact = (contact: User) => {
+    setSelectedContact(contact);
+    setActiveContact(contact);
+  };
+
   const value = {
     user,
     contacts,
     messages,
     activeContact,
+    selectedContact,
     login,
     sendMessage,
     setActiveContact,
+    selectContact,
     loading,
   };
 

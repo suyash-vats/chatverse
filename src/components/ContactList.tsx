@@ -27,7 +27,7 @@ const ContactList = ({ onSelectContact }: ContactListProps) => {
   };
   
   const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase())
+    contact.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -72,7 +72,7 @@ const ContactList = ({ onSelectContact }: ContactListProps) => {
                 <div className="relative">
                   <img
                     src={contact.avatar}
-                    alt={contact.name}
+                    alt={contact.username}
                     className="w-12 h-12 rounded-full object-cover"
                   />
                   {contact.isOnline && (
@@ -81,7 +81,7 @@ const ContactList = ({ onSelectContact }: ContactListProps) => {
                 </div>
                 <div className="ml-3 flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
-                    <h3 className="text-sm font-medium truncate">{contact.name}</h3>
+                    <h3 className="text-sm font-medium truncate">{contact.username}</h3>
                     {lastMessage && (
                       <span className="text-xs text-gray-500">
                         {formatMessageTime(lastMessage.timestamp)}
