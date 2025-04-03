@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
@@ -38,6 +39,10 @@ type Message = {
     username: string;
     avatar: string;
   };
+  // Add compatible fields for MessageBubble
+  senderId: string;
+  text: string;
+  timestamp: string;
 };
 
 type RoomContextType = {
@@ -222,7 +227,16 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
           .order('created_at', { ascending: true });
 
         if (error) throw error;
-        setMessages(data || []);
+        
+        // Map database fields to the fields expected by MessageBubble
+        const formattedMessages = (data || []).map(msg => ({
+          ...msg,
+          senderId: msg.sender_id,
+          text: msg.content,
+          timestamp: msg.created_at,
+        }));
+        
+        setMessages(formattedMessages);
       } catch (error: any) {
         console.error('Error fetching messages:', error.message);
       } finally {
@@ -258,7 +272,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
       const newMessage = {
         ...payload.new,
-        profiles: profileData || { username: 'Unknown', avatar: '' }
+        profiles: profileData || { username: 'Unknown', avatar: '' },
+        senderId: payload.new.sender_id,
+        text: payload.new.content,
+        timestamp: payload.new.created_at
       } as Message;
 
       setMessages(prev => [...prev, newMessage]);
@@ -314,6 +331,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
       return data;
     } catch (error: any) {
+      console.error('Error creating room:', error.message);
       toast.error(`Error creating room: ${error.message}`);
       return null;
     }

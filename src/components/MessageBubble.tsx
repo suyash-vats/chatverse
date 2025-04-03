@@ -3,13 +3,14 @@ import { useChat } from "@/context/ChatContext";
 import type { Message } from "@/context/ChatContext";
 import { formatMessageTime } from "@/utils/dateUtils";
 import { Check, CheckCheck } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 type MessageBubbleProps = {
   message: Message;
 };
 
 const MessageBubble = ({ message }: MessageBubbleProps) => {
-  const { user } = useChat();
+  const { user } = useAuth();
   const isFromMe = message.senderId === user?.id;
 
   const renderMessageStatus = () => {
